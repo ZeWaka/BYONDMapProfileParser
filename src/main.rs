@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use std::cmp::max;
 use std::cmp::min;
+use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::{env, fs};
@@ -15,14 +17,14 @@ use std::{env, fs};
 struct ProfileJSONEntry {
 	name: String,
 	unit: Option<String>,
-	value: f32,
-	calls: i32,
+	value: f64,
+	calls: i64,
 }
 
 #[derive(Debug)]
 struct PlotData {
-	value: OrderedFloat<f32>,
-	calls: i32,
+	value: OrderedFloat<f64>,
+	calls: i64,
 	time: DateTime<FixedOffset>,
 }
 
@@ -82,13 +84,26 @@ fn main() {
 	}
 
 	println!("Drawing graphs...");
+
+	// This part is so we can divide all data by the amount of ticks spent in the round, to eliminate round-length bias
+	let sendmaps_data = data_to_plot.get_all("SendMaps").unwrap(); // Guarenteed to exist in valid map profiling data
+	let mut round_ticks_map = HashMap::new();
+
+	// We also need to get the minimum round ticks for the plot y axis
+	let mut min_round_ticks = i64::MAX;
+
+	for data in sendmaps_data {
+		round_ticks_map.insert(data.time, data.calls as f64); // Convert here for later division
+		min_round_ticks = min(min_round_ticks, data.calls);
+	}
+
 	fs::create_dir_all("output").expect("Unable to create `output/` dir.");
 	for data in data_to_plot.iter() {
 		let graph_name = data.0;
 		let graph_path = format!("output/{}.png", sanitize_filename::sanitize(graph_name));
 
 		// Get maximum value out of our possible logs for max y graph bound
-		let mut max_data_value: OrderedFloat<f32> = OrderedFloat(0_f32);
+		let mut max_data_value: OrderedFloat<f64> = OrderedFloat(0_f64);
 		for data in data.1.iter() {
 			max_data_value = max(max_data_value, data.value);
 		}
@@ -100,6 +115,9 @@ fn main() {
 			min_time = min(min_time, data.time.timestamp());
 			max_time = max(max_time, data.time.timestamp());
 		}
+
+		// Divide by the minimum round ticks we found earlier
+		let max_data_value_adj = f64::from(max_data_value) / min_round_ticks as f64;
 
 		// Setting up graph
 		let root_area = BitMapBackend::new(&graph_path, (1000, 500)).into_drawing_area();
@@ -113,7 +131,12 @@ fn main() {
 				graph_name,
 				(
 					FontFamily::Serif,
-					num::clamp(85 - graph_name.len(), 20, 50) as i32,
+					// Autoscale the text on top so it looks nice
+					num::clamp(
+						85_i64.wrapping_sub(graph_name.len().try_into().unwrap()),
+						25,
+						50,
+					) as i32,
 				)
 					.into_font(),
 			)
@@ -124,7 +147,7 @@ fn main() {
 			// Give some room on the edges of the bounds
 			.build_cartesian_2d(
 				(min_time - 3600)..(max_time + 3600),
-				0_f32..(f32::from(max_data_value) + (f32::from(max_data_value) / 20.0)),
+				0_f64..(max_data_value_adj - (max_data_value_adj / 1.5_f64)), // Manually adjusted
 			)
 			.unwrap();
 
@@ -138,19 +161,27 @@ fn main() {
 
 		//Draw our actual data points
 		chart
-			.draw_series(
-				data.1
-					.iter()
-					.map(|data| Circle::new((data.time.timestamp(), *data.value), 3, RED.filled())),
-			)
+			.draw_series(data.1.iter().map(|data| {
+				Circle::new(
+					(
+						data.time.timestamp(),
+						get_tick_adjusted_value(data, &round_ticks_map),
+					),
+					3,
+					RED.filled(),
+				)
+			}))
 			.unwrap();
 
 		// Draw connecting line
 		chart
 			.draw_series(LineSeries::new(
-				data.1
-					.iter()
-					.map(|data| (data.time.timestamp(), *data.value)),
+				data.1.iter().map(|data| {
+					(
+						data.time.timestamp(),
+						get_tick_adjusted_value(data, &round_ticks_map),
+					)
+				}),
 				&RED,
 			))
 			.unwrap();
@@ -158,4 +189,8 @@ fn main() {
 		root_area.present().expect("Unable to write result to file, please make sure 'output' dir exists under current dir");
 	}
 	println!("Finished: results have been saved to `output/`")
+}
+
+fn get_tick_adjusted_value(data: &PlotData, tick_map: &HashMap<DateTime<FixedOffset>, f64>) -> f64 {
+	*data.value / (*(tick_map.get(&data.time).unwrap_or_else(|| &1.0)))
 }
