@@ -37,7 +37,7 @@ checksum = "9c59e7af012c713f529e7a3ee57ce9b31ddd858d4b512923602f74608b009631"
 
 [[package]]
 name = "byond_map-profile_parser"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "collecting-hashmap",
