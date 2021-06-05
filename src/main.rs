@@ -192,5 +192,5 @@ fn main() {
 }
 
 fn get_tick_adjusted_value(data: &PlotData, tick_map: &HashMap<DateTime<FixedOffset>, f64>) -> f64 {
-	*data.value / (*(tick_map.get(&data.time).unwrap_or_else(|| &1.0)))
+	*data.value / (*(tick_map.get(&data.time).unwrap_or(&1.0)))
 }
