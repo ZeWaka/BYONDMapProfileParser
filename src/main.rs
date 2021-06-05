@@ -147,14 +147,14 @@ fn main() {
 			// Give some room on the edges of the bounds
 			.build_cartesian_2d(
 				(min_time - 3600)..(max_time + 3600),
-				0_f64..(max_data_value_adj - (max_data_value_adj / 1.5_f64)), // Manually adjusted
+				0_f64..(max_data_value_adj - (max_data_value_adj / 1.4_f64)), // Manually adjusted
 			)
 			.unwrap();
 
 		// Draw grid
 		chart
 			.configure_mesh()
-			.y_desc("Seconds")
+			.y_desc("Seconds/Ticks")
 			.x_desc("Roundend in UNIX time")
 			.draw()
 			.expect("Draw failure");
