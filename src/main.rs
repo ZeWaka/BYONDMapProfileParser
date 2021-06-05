@@ -190,6 +190,8 @@ fn main() {
 	println!("Finished: results have been saved to `output/`")
 }
 
+/// Given data and a hashmap of time->total_ticks, adjusts the data by dividing it
+/// This is to compensate for round length in plotting data
 fn get_tick_adjusted_value(data: &PlotData, tick_map: &HashMap<DateTime<FixedOffset>, f64>) -> f64 {
 	*data.value / (*(tick_map.get(&data.time).unwrap_or(&1.0)))
 }
