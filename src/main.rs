@@ -5,13 +5,12 @@ use plotters::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use std::cmp::max;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::fs::File;
-use std::io::prelude::*;
-use std::{env, fs};
+use std::env;
+use std::fs::{create_dir_all, read_dir, File};
+use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ProfileJSONEntry {
@@ -31,7 +30,7 @@ struct PlotData {
 fn main() {
 	let args: Vec<String> = env::args().collect();
 	let dir_path = args[1].clone();
-	let paths = fs::read_dir(dir_path).expect("Invalid or no directory to read provided.");
+	let paths = read_dir(dir_path).expect("Invalid or no directory to read provided.");
 
 	// Reading files
 	let mut data_to_plot: CollectingHashMap<String, PlotData> = CollectingHashMap::new();
@@ -97,7 +96,7 @@ fn main() {
 		min_round_ticks = min(min_round_ticks, data.calls);
 	}
 
-	fs::create_dir_all("output").expect("Unable to create `output/` dir.");
+	create_dir_all("output").expect("Unable to create `output/` dir.");
 	for data in data_to_plot.iter() {
 		let graph_name = data.0;
 		let graph_path = format!("output/{}.png", sanitize_filename::sanitize(graph_name));
