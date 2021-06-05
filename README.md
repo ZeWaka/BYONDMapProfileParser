@@ -45,7 +45,7 @@ replace `"unit"` with `,"unit"`
 
 First argument is to a folder containing your log files.
 
-ex.
+Example: `byond_map-profile_parser.exe examples`
 
 If you're having problems, ask in the [Coderbus Discord] for ZeWaka.
 
