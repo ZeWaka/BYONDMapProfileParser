@@ -6,6 +6,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use std::cmp::max;
+use std::cmp::min;
 use std::fs::File;
 use std::io::prelude::*;
 use std::{env, fs};
@@ -42,10 +43,15 @@ fn main() {
 			.expect("Error reading file");
 
 		// Deserialize
-		let data: Vec<ProfileJSONEntry> =
-			serde_json::from_str(&contents).expect("Error parsing file");
+		let data: Option<Vec<ProfileJSONEntry>> = match serde_json::from_str(&contents) {
+			Ok(x) => x,
+			Err(e) => {
+				println!("Error encountered while parsing:{} \nFile: {}", fullpath.display(), e);
+				None
+			}
+		};
 
-		for entry in data {
+		for entry in data.unwrap() {
 			// Parse date from the file name, for later graphing
 			let mut date_str = fullpath
 				.with_extension("") // Remove extension
@@ -72,6 +78,7 @@ fn main() {
 	}
 
 	println!("Drawing graphs...");
+	fs::create_dir_all("output").expect("Unable to create `output/` dir.");
 	for data in data_to_plot.iter() {
 		let graph_name = data.0;
 		let graph_path = format!("output/{}.png", sanitize_filename::sanitize(graph_name));
@@ -82,43 +89,52 @@ fn main() {
 			max_data_value = max(max_data_value, data.value);
 		}
 
+		// Get min/max time out of our possible logs for min/max x graph bound
+		let mut min_time = i64::MAX;
+		let mut max_time = 0;
+		for data in data.1.iter() {
+			min_time = min(min_time, data.time.timestamp());
+			max_time = max(max_time, data.time.timestamp());
+		}
+
 		// Setting up graph
-		let root_area = BitMapBackend::new(&graph_path, (700, 500)).into_drawing_area();
+		let root_area = BitMapBackend::new(&graph_path, (1000, 500)).into_drawing_area();
 
 		// Color the background white
 		root_area.fill(&WHITE).expect("Couldn't color the drawing.");
 
 		// Create chart elements
 		let mut chart = ChartBuilder::on(&root_area)
-			.caption("BYOND Map Profiler", ("sans-serif", 50).into_font())
-			.margin(5)
-			.x_label_area_size(40)
-			.y_label_area_size(40)
-			.build_cartesian_2d(0f32..50f32, 0f32..max_data_value.into())
+			.caption(graph_name, (FontFamily::Serif, num::clamp(85 - graph_name.len(), 20, 50) as i32).into_font())
+			.margin(20)
+			.margin_right(30)
+			.x_label_area_size(50)
+			.y_label_area_size(50)
+
+			// Give some room on the edges of the bounds
+			.build_cartesian_2d((min_time - 3600)..(max_time + 3600), 0f32..(f32::from(max_data_value) + (f32::from(max_data_value) / 20.0)))
 			.unwrap();
 
 		// Draw grid
-		chart.configure_mesh().draw().expect("Draw failure");
-
-		// Draw our actual data
-		// chart.draw_series(
-		// 	data.1.iter().map(|value, calls| Circle::new(coord, size, style))
-		// ).unwrap();
-
-		chart
-			.draw_series(LineSeries::new(
-				(-50..=50).map(|x| x as f32 / 50.0).map(|x| (x, x * x)),
-				&RED,
-			))
-			.unwrap()
-			.label(graph_name)
-			.legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
-
-		chart
-			.configure_series_labels()
-			.background_style(&WHITE.mix(0.8))
-			.border_style(&BLACK)
+		chart.configure_mesh()
+			.y_desc("Seconds")
+			.x_desc("Roundend in UNIX time")
 			.draw()
-			.unwrap();
+			.expect("Draw failure");
+
+		//Draw our actual data points
+		chart.draw_series(
+			data.1.iter().map(|data| Circle::new((data.time.timestamp(), *data.value), 3, RED.filled()))
+		).unwrap();
+
+		// Draw connecting line
+		chart.draw_series(
+			LineSeries::new(
+			data.1.iter().map(|data| (data.time.timestamp(), *data.value)),
+			&RED)
+		).unwrap();
+
+		root_area.present().expect("Unable to write result to file, please make sure 'output' dir exists under current dir");
 	}
+	println!("Finished: results have been saved to `output/`")
 }
