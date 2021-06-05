@@ -46,11 +46,12 @@ fn main() {
 			Ok(x) => x,
 			Err(e) => {
 				println!(
-					"Error encountered while parsing:{} \nFile: {}",
+					"Error encountered while parsing:{} \nFile: {}\n
+					Did you use a 514.1554 file and not fix it?",
 					fullpath.display(),
 					e
 				);
-				None
+				panic!()
 			}
 		};
 
